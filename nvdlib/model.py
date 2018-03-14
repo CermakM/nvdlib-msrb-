@@ -19,6 +19,16 @@ class CVE(object):
         self.last_modified_date = last_modified_date
         # TODO: some attributes are missing
 
+    def get_cpe(self, cpe_type=None) -> list:
+        def _is_type(uri: str, t: str):
+            return uri.startswith("cpe:/%s" % t)
+
+        cpe_list = list()
+        for node in self.configurations:
+            cpe_list.extend([cpe for cpe in node.cpe if _is_type(cpe.cpe22Uri, cpe_type)])
+
+        return cpe_list
+
     @classmethod
     def from_dict(cls, data):
         """Initialize class from cve json dictionary."""
@@ -111,24 +121,36 @@ class ConfigurationNode(object):
 
 class CPE(object):
 
-    def __init__(self, vulnerable: bool, cpe22Uri: str, cpe23Uri: str, versionStartIncluding: str = None, versionStartExcluding: str = None,
-                 versionEndIncluding: str = None, versionEndExcluding: str = None):
+    def __init__(self, vulnerable: bool, cpe22Uri: str, cpe23Uri: str, versionStartIncluding: str = None,
+                 versionStartExcluding: str = None, versionEndIncluding: str = None, versionEndExcluding: str = None):
         self._vulnerable = vulnerable
         self._cpe22Uri = cpe22Uri
         self._cpe23Uri = cpe23Uri
+
+        self._cpe_parser = cpe.CPE(cpe22Uri)
+        self._vendor = self._cpe_parser.get_vendor()
+        self._product = self._cpe_parser.get_product()
+        self._versionExact, = self._cpe_parser.get_version() or None
         self._versionStartIncluding = versionStartIncluding
         self._versionStartExcluding = versionStartExcluding
         self._versionEndIncluding = versionEndIncluding
         self._versionEndExcluding = versionEndExcluding
 
     def is_application(self):
-        return cpe.CPE(self.cpe22Uri).is_application()
+        return self._cpe_parser.is_application()
 
     def is_hardware(self):
-        return cpe.CPE(self.cpe22Uri).is_hardware()
+        return self._cpe_parser.is_hardware()
 
     def is_operating_system(self):
-        return cpe.CPE(self.cpe22Uri).is_operating_system()
+        return self._cpe_parser.is_operating_system()
+
+    def get_version_tuple(self):
+        return (
+            self._versionExact,
+            self._versionEndExcluding, self._versionEndIncluding,
+            self._versionStartIncluding, self._versionStartExcluding
+        )
 
     @property
     def vulnerable(self):
@@ -141,6 +163,18 @@ class CPE(object):
     @property
     def cpe23Uri(self):
         return self._cpe23Uri
+
+    @property
+    def product(self):
+        return self._product
+
+    @property
+    def vendor(self):
+        return self._vendor
+
+    @property
+    def versionExact(self):
+        return self._versionExact
 
     @property
     def versionStartIncluding(self):
